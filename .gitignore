@@ -1,0 +1,12 @@
+# Ignore everything by default
+/*
+
+# Keep this gitignore file
+!.gitignore
+
+# Allow the wad directory and everything under it
+!/wad/
+!/wad/**
+
+# (Optional) If you add other top-level files to track, whitelist them here
+# e.g. !/README.md
