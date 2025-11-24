@@ -55,7 +55,7 @@ private:
     };
 
     // -------- Internal State --------
-    int fd;                            // POSIX file descriptor
+    int fileDescriptor;                // POSIX file descriptor
     string wadPath;               // real filesystem path
 
     string magic;
