@@ -1,16 +1,21 @@
-CXX = g++
-CXXFLAGS = -Wall -Wextra -g -std=c++17
+CXX      = g++
+CXXFLAGS = -Wall -Wextra -std=c++17 -g
 
-SRC = Wad.cpp wad_dump.cpp
-OBJ = $(SRC:.cpp=.o)
+LIB_NAME = libWad.a
+LIB_SRC  = Wad.cpp
+LIB_OBJ  = Wad.o
 
-all: wad_dump
+all: $(LIB_NAME)
 
-wad_dump: $(OBJ)
-	$(CXX) $(CXXFLAGS) -o wad_dump $(OBJ)
+# Build static library
+$(LIB_NAME): $(LIB_OBJ)
+	ar rcs $(LIB_NAME) $(LIB_OBJ)
 
-%.o: %.cpp Wad.h
-	$(CXX) $(CXXFLAGS) -c $<
+# Compile object file
+$(LIB_OBJ): Wad.cpp Wad.h
+	$(CXX) $(CXXFLAGS) -c Wad.cpp -o Wad.o
 
 clean:
-	rm -f *.o wad_dump
+	rm -f $(LIB_OBJ) $(LIB_NAME)
+
+.PHONY: all clean
