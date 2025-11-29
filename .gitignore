@@ -8,5 +8,8 @@
 !/wad/
 !/wad/**
 
+!/test-workspace/
+!/test-workspace/**
+
 # (Optional) If you add other top-level files to track, whitelist them here
 # e.g. !/README.md
