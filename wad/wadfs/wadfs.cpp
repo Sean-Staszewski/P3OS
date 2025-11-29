@@ -112,6 +112,37 @@ static int wfs_write(const char *path, const char *buf, size_t size, off_t offse
     return r;
 }
 
+// The assignment requires these exact callback function names:
+// get_attr, mknod, mkdir, read, write, and readdir
+// Provide thin wrappers that call our internal implementations so the
+// function names match the spec exactly.
+static int get_attr(const char *path, struct stat *stbuf) {
+    return wfs_getattr(path, stbuf);
+}
+
+static int readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                   off_t offset, struct fuse_file_info *fi) {
+    return wfs_readdir(path, buf, filler, offset, fi);
+}
+
+int mknod(const char *path, mode_t mode, dev_t rdev) {
+    return wfs_mknod(path, mode, rdev);
+}
+
+int mkdir(const char *path, mode_t mode) {
+    return wfs_mkdir(path, mode);
+}
+
+static int read(const char *path, char *buf, size_t size, off_t offset,
+                struct fuse_file_info *fi) {
+    return wfs_read(path, buf, size, offset, fi);
+}
+
+static int write(const char *path, const char *buf, size_t size, off_t offset,
+                 struct fuse_file_info *fi) {
+    return wfs_write(path, buf, size, offset, fi);
+}
+
 static struct fuse_operations wfs_oper;
 
 static void print_usage()
@@ -157,13 +188,13 @@ int main(int argc, char *argv[])
 
      /* Initialize operations struct and assign callbacks explicitly
          to avoid designated-initializer ordering issues in C++. */
-     memset(&wfs_oper, 0, sizeof(wfs_oper));
-     wfs_oper.getattr = wfs_getattr;
-     wfs_oper.readdir = wfs_readdir;
-     wfs_oper.mknod = wfs_mknod;
-     wfs_oper.mkdir = wfs_mkdir;
-     wfs_oper.read = wfs_read;
-     wfs_oper.write = wfs_write;
+    memset(&wfs_oper, 0, sizeof(wfs_oper));
+    wfs_oper.getattr = get_attr;
+    wfs_oper.readdir = readdir;
+    wfs_oper.mknod = mknod;
+    wfs_oper.mkdir = mkdir;
+    wfs_oper.read = read;
+    wfs_oper.write = write;
 
      int ret = fuse_main(fuse_argc, fuse_argv.data(), &wfs_oper, g_wad);
 
