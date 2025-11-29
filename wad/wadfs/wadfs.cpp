@@ -173,6 +173,14 @@ int main(int argc, char *argv[])
     string wadPath = argv[argi++];
     char *mountpoint = argv[argi++];
 
+    // Diagnostic: print what we're about to pass to Wad::loadWad
+    std::cerr << "wadfs: argc=" << argc << "\n";
+    for (int i = 0; i < argc; ++i) {
+        std::cerr << "argv[" << i << "]='" << argv[i] << "'\n";
+    }
+    std::cerr << "Resolved wadPath='" << wadPath << "'\n";
+    std::cerr << "Resolved mountpoint='" << mountpoint << "'\n";
+
     g_wad = Wad::loadWad(wadPath);
     if (!g_wad) {
         std::cerr << "Failed to load WAD: " << wadPath << std::endl;

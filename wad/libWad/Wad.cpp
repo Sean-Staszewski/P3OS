@@ -1,9 +1,9 @@
 #include "Wad.h"
 #include <unistd.h>
 #include <fcntl.h>
-#include <functional> 
-#include <cstring>   
-// #include <iostream> // for debug printTree
+#include <functional>
+#include <cstring>
+#include <iostream> // for debug printTree and diagnostics
 
 using namespace std;
 
