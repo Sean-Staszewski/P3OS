@@ -3,11 +3,10 @@
 #include <fcntl.h>
 #include <functional>
 #include <cstring>
-#include <iostream> // for debug printTree and diagnostics
 
 using namespace std;
 
-// -------- Static Constructor --------
+// Static Constructor
 Wad* Wad::loadWad(const string &path) {
 
     Wad* wad = new Wad(path);
@@ -20,8 +19,6 @@ Wad* Wad::loadWad(const string &path) {
 
     wad->fileDescriptor = descriptor;
 
-    // Load WAD internals (header, descriptors, tree).
-    // Individual loaders are responsible for handling errors.
     wad->loadHeader();
     wad->loadDescriptors();
     wad->buildTree();
@@ -29,11 +26,10 @@ Wad* Wad::loadWad(const string &path) {
 
     // wad->printTree(); // debug
 
-
     return wad;
 }
 
-// -------- Private Constructor --------
+// Private Constructor 
 Wad::Wad(const string &path)
         : fileDescriptor(-1), wadPath(path), magic(""), descriptorCount(0),
       descriptorOffset(0), root(nullptr) {
@@ -45,7 +41,7 @@ Wad::~Wad() {
     close(fileDescriptor);   
 }
 
-// -------- Accessor Methods --------
+// Getters
 string Wad::getMagic() const {
     return magic;
 }
@@ -67,8 +63,7 @@ int Wad::getSize(const string &path) const {
     Node* node = lookupNode(path);
     if (!node) return -1;
     if (node->isDirectory) return -1;
-    // length is stored as uint32_t in Node; return as int (truncate if too large)
-    return static_cast<int>(node->length);
+    return static_cast<int>(node->length); //length is uint32
 }
 
 int Wad::getContents(const string &path, char *buffer, int length, int offset) {
@@ -109,11 +104,9 @@ int Wad::getDirectory(const string &path, vector<string> *directory) {
 
 
 
-
-
-// -------- Mutating Methods --------
+// Setters
 void Wad::createDirectory(const string &path) {
-    // ---------- 1. Normalize the path ----------
+    // Normalize the path 
     string cleaned = path;
 
     while (!cleaned.empty() && cleaned.front() == '/')
@@ -124,13 +117,12 @@ void Wad::createDirectory(const string &path) {
     if (cleaned.empty())
         return; // "/", "//", or ""
 
-    // ---------- 2. Tokenize ----------
+    //  2. Tokenize 
     vector<string> parts = tokenize(cleaned);
     if (parts.empty())
         return;
 
-    // ========== 3. PRECHECK RULES FOR TEST CASES ==========
-    // We check *parents* first, before doing any creation.
+    // Check *parents* first
     {
         Node* temp = root;
 
@@ -154,11 +146,10 @@ void Wad::createDirectory(const string &path) {
             }
 
             if (!found) {
-                // Test 5: parent directory does NOT exist → abort completely
                 return;
             }
 
-            // Test 7: cannot create inside a map directory
+            // Cannot create inside a map directory
             if (isMapMarker(comp)) {
                 return;
             }
@@ -168,18 +159,17 @@ void Wad::createDirectory(const string &path) {
     // The directory we want to create
     const string &last = parts.back();
 
-    // Test 6: Cannot create top-level map directory (E1M1, E2M3, etc.)
+    // Cannot create inside a map directory
     if (isMapMarker(last)) {
         return;
     }
 
-    // Test 4: Directory name too long (>2 chars)
-    // Example: "/Gl/exam/" → "exam" is invalid
+    // check size
     if (last.size() > 2) {
         return;
     }
 
-    // ---------- 4. Actual Creation ----------
+    // Finally, we create directory
     Node* curr = root;
     string absPath;
 
@@ -211,8 +201,8 @@ void Wad::createDirectory(const string &path) {
             next->parent = curr;
             curr->children.push_back(next);
 
-            next->offset = 0;        // saveWad will fill properly
-            pathMap[absPath] = next; // update map
+            next->offset = 0;
+            pathMap[absPath] = next;
         }
 
         curr = next;
@@ -224,7 +214,7 @@ void Wad::createDirectory(const string &path) {
 void Wad::createFile(const string &path) {
     if (path.empty()) return;
 
-    // Normalize: remove leading/trailing slashes
+    // Normalize
     string cleaned = path;
     while (!cleaned.empty() && cleaned.front() == '/') cleaned.erase(cleaned.begin());
     while (!cleaned.empty() && cleaned.back() == '/') cleaned.pop_back();
@@ -239,7 +229,7 @@ void Wad::createFile(const string &path) {
     string filename = parts.back();
     parts.pop_back();
 
-    // Build parent path; if no parent components, parent is root ("/")
+    // Build parent path
     string parentPath = "/";
     if (!parts.empty()) {
         parentPath.clear();
@@ -252,7 +242,7 @@ void Wad::createFile(const string &path) {
     // Lookup parent node
     Node* parent = lookupNode(parentPath);
     if (!parent) {
-        // parent doesn't exist
+        // parent does not exist
         return;
     }
     if (!parent->isDirectory) {
@@ -260,20 +250,10 @@ void Wad::createFile(const string &path) {
         return;
     }
 
-    // Helper: strip _START/_END suffix when checking map markers
-    auto stripStartEnd = [](const string &n) -> string {
-        if (n.size() > 6 && n.compare(n.size()-6, 6, "_START") == 0)
-            return n.substr(0, n.size()-6);
-        if (n.size() > 4 && n.compare(n.size()-4, 4, "_END") == 0)
-            return n.substr(0, n.size()-4);
-        return n;
-    };
-
-    // Reject creating files inside map marker directories
-    string parentNameStripped = stripStartEnd(parent->name);
+    // Cant create stuff in E#M# directories
+    string parentNameStripped = cleanName(parent->name);
     if (isMapMarker(parentNameStripped)) return;
 
-    // Check duplicate name in parent (compare exact names for files; directories may have _START)
     for (Node* c : parent->children) {
         if (!c) continue;
         if (!c->isDirectory && c->name == filename) {
@@ -282,16 +262,16 @@ void Wad::createFile(const string &path) {
         }
         // Also reject if a directory exists with same base name (e.g., "foo" and "foo_START")
         if (c->isDirectory) {
-            string childBase = stripStartEnd(c->name);
+            string childBase = cleanName(c->name);
             if (childBase == filename) return;
         }
     }
 
-    // 2. Do not allow creating a file whose name matches a map marker
+    // cant make map markers
     if (isMapMarker(filename))
         return;
 
-    // ---- Validate filename according to WAD lump rules ----
+    // WAD rule checks
 
     // Enforce maximum lump name length (8 chars)
     if (filename.size() > 8)
@@ -299,16 +279,13 @@ void Wad::createFile(const string &path) {
 
 
 
-    // Create new file node (virtual only)
     Node* fileNode = new Node(filename, false);
     fileNode->parent = parent;
-    fileNode->offset = 0; // will be assigned by saveWad()
+    fileNode->offset = 0; 
     fileNode->length = 0;
 
-    // Insert as last child so it will be written before any _END marker
     parent->children.push_back(fileNode);
 
-    // Add to pathMap with absolute path (root case handled)
     string fullPath;
     if (parentPath == "/") fullPath = "/" + filename;
     else fullPath = parentPath + "/" + filename;
@@ -318,63 +295,44 @@ void Wad::createFile(const string &path) {
 }
 
 int Wad::writeToFile(const string &path, const char *buffer, int length, int offset) {
-    // Basic validation
+    // validation
     if (path.empty()) return -1;
     if (!buffer && length > 0) return -1; // nothing to copy
     if (length < 0) return -1;
     if (offset < 0) return -1;
 
-    // Lookup node
     Node* node = lookupNode(path);
     if (!node) return -1;
-
-    // Path must represent content, not directory
     if (node->isDirectory) return -1;
 
-    // If the file already has content (non-zero length) we must not overwrite it:
-    // per spec, return 0 to indicate valid path but write failed because file exists.
+    // file not empty, cannot write
     if (node->length > 0) return 0;
 
-    // If requested write length is zero, nothing to do, return 0 bytes written.
+    // nothing to write
     if (length == 0) return 0;
 
-    // Ensure node->data exists and is large enough to hold offset + length bytes.
-    // (Assumes Node has: vector<uint8_t> data;)
+    // fix size of file data buffer if necessary
     size_t requiredSize = static_cast<size_t>(offset) + static_cast<size_t>(length);
     if (node->data.size() < requiredSize) {
         node->data.resize(requiredSize);
     }
 
-    // Copy bytes from user buffer into node->data at given offset
+    // Copy bytes from buffer into node->data
     memcpy(node->data.data() + offset, buffer, static_cast<size_t>(length));
-
-    // Update node length to reflect actual stored data size
+    // Update node length
     node->length = static_cast<uint32_t>(node->data.size());
 
-    // If node->offset currently 0 and this node was a virtual/created file (previously length==0),
-    // you may want to mark its offset for saveWad to rewrite. We'll leave offset alone here:
-    // saveWad() should compute and assign final offsets for all lumps.
-    //
-    // If you prefer a temporary offset marker for in-memory-only lumps, set it here (optional):
-    // if (node->offset == 0) node->offset = 0; // no-op / placeholder
-
-    // Return number of bytes copied
     return length;
 }
 
 
 
 
-
-
-
-
-
-// -------- Internal Helpers --------
+// Helpers
 void Wad::loadHeader() {
     if (fileDescriptor < 0) return;
     
-    // Header layout (classic WAD): 4-byte magic, uint32 descriptor count, uint32 descriptor offset
+    // Header layout: 4-byte magic, 4-byte = uint32 descriptor count, 4-byte = uint32 descriptor offset
     lseek(fileDescriptor, 0, SEEK_SET);
 
     char magicBuf[4];
@@ -412,7 +370,6 @@ void Wad::loadDescriptors() {
         r = read(fileDescriptor, nameBytes, 8);
         if (r != 8) break;
 
-        // Trim trailing NULs and spaces
         int nlen = 8;
         while (nlen > 0 && (nameBytes[nlen - 1] == '\0' || nameBytes[nlen - 1] == ' '))
             --nlen;
@@ -421,7 +378,7 @@ void Wad::loadDescriptors() {
         if (hasSlash) --nlen;
 
         d.name.assign(nameBytes, nameBytes + nlen);
-        if (hasSlash) d.name += '/'; // preserve trailing slash for WAD descriptor
+        if (hasSlash) d.name += '/';
 
         descriptors.push_back(d);
     }
@@ -464,7 +421,6 @@ void Wad::buildTree() {
         return nm.size() > 4 && nm.compare(nm.size() - 4, 4, "_END") == 0;
     };
 
-
     auto isEMDirectory = [&](size_t i) {
         if (!isMapMarker(descriptors[i].name)) return false;
         if (i + 1 >= descriptors.size()) return true; // last descriptor = directory
@@ -504,38 +460,25 @@ void Wad::buildTree() {
             continue;
         }
 
-        // Namespace end → pop
         // Namespace end → pop matching start
         if (isNamespaceEnd(name)) {
             string target = name.substr(0, name.size()-4); // remove _END
 
-            // Pop until we find the matching start
             while (stack.size() > 1) { // don't pop root
                 Node* top = stack.back();
                 string topNameClean = this->cleanName(top->name);
                 if (topNameClean == target) {
-                    stack.pop_back(); // found matching start
+                    stack.pop_back();
                     break;
                 } else {
-                    stack.pop_back(); // intermediate node, keep popping
+                    stack.pop_back();
                 }
             }
-            continue; // move to next descriptor
-        }
-
-
-        // EM directories
-        if (isEMDirectory(i)) {
-            Node* dir = new Node(name, true);
-            dir->parent = stack.back();
-            stack.back()->children.push_back(dir);
-            stack.push_back(dir);
-            addPath(dir);
             continue;
         }
 
-        // **New: manually created directories (length=0, trailing '/')**
-        if (d.length == 0 && !name.empty() && name.back() == '/') {
+        // EM directories
+        if (isEMDirectory(i)) {
             Node* dir = new Node(name, true);
             dir->parent = stack.back();
             stack.back()->children.push_back(dir);
@@ -601,27 +544,22 @@ vector<string> Wad::tokenize(const string &path) const {
     size_t i = 0;
     size_t n = path.size();
 
-    // Skip leading slashes
     while (i < n && path[i] == '/')
         i++;
 
     while (i < n) {
         size_t start = i;
 
-        // Find next slash
         while (i < n && path[i] != '/')
             i++;
 
-        // Extract component
         if (i > start) {
             string part = path.substr(start, i - start);
 
-            // ignore "." and ".." because WAD has no parent dirs
             if (part != "." && part != "..")
                 result.push_back(part);
         }
 
-        // Move past repeated slashes
         while (i < n && path[i] == '/')
             i++;
     }
@@ -661,7 +599,6 @@ void Wad::saveWad() {
     vector<Descriptor> newDescriptors;
     vector<uint8_t> newLumpData;
 
-    // Header size: magic (4) + descriptor count (4) + descriptor offset (4)
     const uint32_t headerSize = 12;
 
     // Recursive writer
@@ -723,7 +660,7 @@ void Wad::saveWad() {
         }
     };
 
-    // Serialize tree (skip root itself)
+    // start recursive write from root's children
     for (Node* n : root->children)
         writeNode(n);
 

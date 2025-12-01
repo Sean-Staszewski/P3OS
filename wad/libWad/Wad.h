@@ -12,7 +12,7 @@ class Wad {
 public:
     // Static Constructor & Destructor
     static Wad* loadWad(const string &path);
-    ~Wad();
+    ~Wad(); // saves any changes and closes file
 
     // Getters
     string getMagic() const;
@@ -32,17 +32,17 @@ public:
     int writeToFile(const string &path, const char *buffer, int length, int offset = 0);
 
 private:
-    // Private Constructor: only loadWad() can call it
+    // Private Constructor: only loadWad() calls it
     Wad(const string &path);
 
-    // -------- Internal Structures --------
+    // Helper Structures
     struct Descriptor {
         uint32_t offset;
         uint32_t length;
         string name;         // decoded from 8 bytes
     };
 
-    struct Node {
+    struct Node { // represents a file or directory in the WAD tree
         string name;
         bool isDirectory;
         uint32_t offset;          // only valid if content file
@@ -55,7 +55,13 @@ private:
             : name(n), isDirectory(dir), offset(0), length(0), parent(nullptr) {}
     };
 
-    // -------- Internal State --------
+    Node* root;
+    unordered_map<string, Node*> pathMap;
+    vector<Descriptor> descriptors;
+    unordered_map<string, vector<char>> virtualFileData;
+
+
+    // WAD attributes
     int fileDescriptor;                // POSIX file descriptor
     string wadPath;               // real filesystem path
 
@@ -63,15 +69,9 @@ private:
     uint32_t descriptorCount;
     uint32_t descriptorOffset;
 
-    vector<Descriptor> descriptors;
-    unordered_map<string, vector<char>> virtualFileData;
 
-    Node* root;
 
-    // A map from absolute paths ("/F/F1/file.txt") to Node*
-    unordered_map<string, Node*> pathMap;
-
-    // -------- Internal Helper Functions --------
+    // helpers
     void loadHeader();
     void loadDescriptors();
     void buildTree();
@@ -79,13 +79,13 @@ private:
 
     Node* lookupNode(const string &path) const;
 
-    bool isMapMarker(const string &name) const;
+    bool isMapMarker(const string &name) const; // E#M# checker
 
-    vector<string> tokenize(const string &path) const;
+    vector<string> tokenize(const string &path) const; // cuts up path into its parts
 
     // void printTree() const; // for debugging
 
-    void saveWad();
+    void saveWad(); // saves all data stored virtually back into WAD file
 
-    string cleanName(const std::string &name) const;
+    string cleanName(const std::string &name) const; // cleans _START and _END markers directory names
 };
