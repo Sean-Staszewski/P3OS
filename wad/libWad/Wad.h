@@ -58,8 +58,6 @@ private:
     Node* root;
     unordered_map<string, Node*> pathMap;
     vector<Descriptor> descriptors;
-    unordered_map<string, vector<char>> virtualFileData;
-
 
     // WAD attributes
     int fileDescriptor;                // POSIX file descriptor
